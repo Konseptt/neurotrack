@@ -294,7 +294,11 @@ function RealisticHead({
 
   // ── Refs to current selected / hovered state (avoids stale closures) ───
   const selectedRef = useRef(selectedRegions);
-  selectedRef.current = selectedRegions;
+
+  React.useEffect(() => {
+    selectedRef.current = selectedRegions;
+  }, [selectedRegions]);
+
   const hoveredRef = useRef(-1);
 
   // ── Frame loop: compute dot(cameraDir, regionFacing) each frame ─────────
@@ -412,8 +416,22 @@ function FallbackHead({
     const c = REGIONS.find(x => x.name === r)?.color ?? '#ef4444';
     return { color: sel ? c : h ? `${c}99` : base, emissive: sel ? c : '#000', emissiveIntensity: sel ? 0.25 : 0 };
   };
-  const over = (e: any, r: RegionName) => { e.stopPropagation(); setHov(r); document.body.style.cursor = 'pointer'; };
-  const out = (e: any) => { e.stopPropagation(); setHov(null); document.body.style.cursor = 'auto'; };
+  const over = (e: any, r: RegionName) => {
+    e.stopPropagation();
+    setHov(r);
+  };
+
+  const out = (e: any) => {
+    e.stopPropagation();
+    setHov(null);
+  };
+
+  React.useEffect(() => {
+    document.body.style.cursor = hov ? 'pointer' : 'auto';
+    return () => {
+      document.body.style.cursor = 'auto';
+    };
+  }, [hov]);
 
   return (
     <group>
