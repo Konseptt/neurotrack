@@ -1,11 +1,18 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, computeRegionFrequency } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import { format, parseISO, differenceInMinutes } from 'date-fns';
-import { Plus, Activity, Clock, Calendar, LogOut } from 'lucide-react';
+import { Plus, Activity, Clock, Calendar, LogOut, MapPin } from 'lucide-react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import type { RegionIntensity } from '@/components/HeadDiagram3D';
+
+const HeadDiagram3D = dynamic(
+  () => import('@/components/HeadDiagram3D').then(mod => ({ default: mod.HeadDiagram3D })),
+  { ssr: false, loading: () => <div className="aspect-square bg-gray-100 rounded-2xl animate-pulse" /> }
+);
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -45,6 +52,16 @@ export default function DashboardPage() {
   const avgDuration = totalLogs > 0 ? Math.round(totalDurationMinutes / totalLogs) : 0;
   const avgIntensity = totalRegionsLogged > 0 ? (totalIntensity / totalRegionsLogged).toFixed(1) : '0.0';
 
+  // Region frequency analytics
+  const regionFrequency = computeRegionFrequency(userSessions);
+  const mostAffectedRegion = regionFrequency.length > 0 ? regionFrequency[0] : null;
+
+  // Heatmap intensities for the 3D head (aggregated average intensities per region)
+  const heatmapIntensities: RegionIntensity[] = regionFrequency.map(rf => ({
+    region: rf.region,
+    intensity: rf.avgIntensity,
+  }));
+
   const handleLogout = () => {
     logout();
     router.push('/');
@@ -80,6 +97,69 @@ export default function DashboardPage() {
             </div>
           </div>
         </section>
+
+        {/* Most Affected Region & Region Frequency */}
+        {regionFrequency.length > 0 && (
+          <section>
+            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Region Analysis</h2>
+            {mostAffectedRegion && (
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-4 flex items-center space-x-3">
+                <div className="bg-red-50 p-2 rounded-xl">
+                  <MapPin className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Most Affected Region</div>
+                  <div className="font-semibold text-gray-900">{mostAffectedRegion.region} <span className="text-sm font-normal text-gray-500">({mostAffectedRegion.count} occurrences, avg {mostAffectedRegion.avgIntensity}/10)</span></div>
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              {regionFrequency.map(rf => (
+                <div key={rf.region} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                  <span className="text-sm text-gray-700">{rf.region}</span>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-24 bg-gray-100 rounded-full h-2">
+                      <div
+                        className="bg-red-400 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (rf.avgIntensity / 10) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-500 w-16 text-right">{rf.count}× / {rf.avgIntensity}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Pain Heatmap */}
+        {heatmapIntensities.length > 0 && (
+          <section>
+            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Pain Heatmap</h2>
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+              <p className="text-sm text-gray-500 mb-3">Aggregated pain intensity across all logged sessions.</p>
+              <div className="h-[350px]">
+                <HeadDiagram3D
+                  selectedRegions={[]}
+                  onToggleRegion={() => {}}
+                  regionIntensities={heatmapIntensities}
+                  showNerveOverlay={true}
+                />
+              </div>
+              <div className="flex items-center justify-center mt-3 space-x-1">
+                <span className="text-xs text-gray-400">Low</span>
+                <div className="flex h-2 rounded-full overflow-hidden">
+                  <div className="w-8 bg-blue-300" />
+                  <div className="w-8 bg-green-300" />
+                  <div className="w-8 bg-yellow-300" />
+                  <div className="w-8 bg-orange-400" />
+                  <div className="w-8 bg-red-500" />
+                </div>
+                <span className="text-xs text-gray-400">High</span>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section>
           <div className="flex justify-between items-center mb-4">

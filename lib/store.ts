@@ -31,13 +31,46 @@ export interface User {
   created_at: string;
 }
 
+export interface RegionFrequency {
+  region: RegionName;
+  count: number;
+  avgIntensity: number;
+}
+
+/** Validates email format */
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 interface AppState {
   currentUser: User | null;
   sessions: MigraineSession[];
-  login: (email: string) => void;
+  login: (email: string) => string | null;
   logout: () => void;
   addSession: (session: Omit<MigraineSession, 'id' | 'user_id'>) => void;
   deleteSession: (id: string) => void;
+}
+
+/** Compute region frequency analytics from sessions */
+export function computeRegionFrequency(sessions: MigraineSession[]): RegionFrequency[] {
+  const regionMap = new Map<RegionName, { count: number; totalIntensity: number }>();
+  
+  sessions.forEach(session => {
+    session.regions.forEach(r => {
+      const existing = regionMap.get(r.region_name) || { count: 0, totalIntensity: 0 };
+      existing.count += 1;
+      existing.totalIntensity += r.intensity;
+      regionMap.set(r.region_name, existing);
+    });
+  });
+
+  return Array.from(regionMap.entries())
+    .map(([region, data]) => ({
+      region,
+      count: data.count,
+      avgIntensity: data.count > 0 ? Math.round((data.totalIntensity / data.count) * 10) / 10 : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
 }
 
 export const useAppStore = create<AppState>()(
@@ -46,13 +79,16 @@ export const useAppStore = create<AppState>()(
       currentUser: null,
       sessions: [],
       login: (email: string) => {
-        // Simple mock login
+        if (!isValidEmail(email)) {
+          return 'Please enter a valid email address.';
+        }
         const user: User = {
           id: uuidv4(),
           email,
           created_at: new Date().toISOString(),
         };
         set({ currentUser: user });
+        return null;
       },
       logout: () => {
         set({ currentUser: null });

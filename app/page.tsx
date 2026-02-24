@@ -9,6 +9,7 @@ export default function Home() {
   const router = useRouter();
   const { currentUser, login } = useAppStore();
   const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -23,8 +24,13 @@ export default function Home() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     if (email.trim()) {
-      login(email.trim());
+      const validationError = login(email.trim());
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
       router.push('/dashboard');
     }
   };
@@ -49,11 +55,14 @@ export default function Home() {
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setError(''); }}
               placeholder="you@example.com"
               required
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow outline-none"
             />
+            {error && (
+              <p className="text-sm text-red-600">{error}</p>
+            )}
           </div>
 
           <button

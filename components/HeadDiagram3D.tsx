@@ -7,10 +7,19 @@ import * as THREE from 'three';
 import { RegionName } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
+export interface RegionIntensity {
+  region: RegionName;
+  intensity: number; // 0 to 10
+}
+
 interface HeadDiagramProps {
   selectedRegions: RegionName[];
   onToggleRegion: (region: RegionName) => void;
   className?: string;
+  /** Optional region intensities for heatmap coloring (0-10 per region) */
+  regionIntensities?: RegionIntensity[];
+  /** When true, shows nerve overlay paths on the 3D head */
+  showNerveOverlay?: boolean;
 }
 
 const REGIONS: { name: RegionName; position: [number, number, number] }[] = [
@@ -40,6 +49,114 @@ const ALL_VORONOI_REGIONS = [
   ...DUMMY_REGIONS.map(r => ({ ...r, clickable: false }))
 ];
 
+/**
+ * Trigeminal nerve pathway definitions - three main branches:
+ * V1 (Ophthalmic), V2 (Maxillary), V3 (Mandibular)
+ */
+const NERVE_PATHS: { name: string; color: string; points: [number, number, number][] }[] = [
+  {
+    name: 'V1 Ophthalmic (Left)',
+    color: '#60a5fa',
+    points: [
+      [0.3, -0.2, 0.3],
+      [0.35, 0.0, 0.6],
+      [0.35, 0.15, 0.85],
+      [0.2, 0.4, 0.85],
+      [0.0, 0.6, 0.8],
+    ],
+  },
+  {
+    name: 'V1 Ophthalmic (Right)',
+    color: '#60a5fa',
+    points: [
+      [-0.3, -0.2, 0.3],
+      [-0.35, 0.0, 0.6],
+      [-0.35, 0.15, 0.85],
+      [-0.2, 0.4, 0.85],
+      [0.0, 0.6, 0.8],
+    ],
+  },
+  {
+    name: 'V2 Maxillary (Left)',
+    color: '#34d399',
+    points: [
+      [0.3, -0.2, 0.3],
+      [0.4, -0.1, 0.6],
+      [0.4, -0.3, 0.7],
+      [0.2, -0.1, 0.95],
+    ],
+  },
+  {
+    name: 'V2 Maxillary (Right)',
+    color: '#34d399',
+    points: [
+      [-0.3, -0.2, 0.3],
+      [-0.4, -0.1, 0.6],
+      [-0.4, -0.3, 0.7],
+      [-0.2, -0.1, 0.95],
+    ],
+  },
+  {
+    name: 'V3 Mandibular (Left)',
+    color: '#f472b6',
+    points: [
+      [0.3, -0.2, 0.3],
+      [0.5, -0.3, 0.4],
+      [0.55, -0.5, 0.5],
+      [0.3, -0.7, 0.5],
+    ],
+  },
+  {
+    name: 'V3 Mandibular (Right)',
+    color: '#f472b6',
+    points: [
+      [-0.3, -0.2, 0.3],
+      [-0.5, -0.3, 0.4],
+      [-0.55, -0.5, 0.5],
+      [-0.3, -0.7, 0.5],
+    ],
+  },
+];
+
+function NerveOverlay() {
+  return (
+    <group>
+      {NERVE_PATHS.map((nerve) => {
+        const curve = new THREE.CatmullRomCurve3(
+          nerve.points.map((p) => new THREE.Vector3(...p))
+        );
+        const tubeGeo = new THREE.TubeGeometry(curve, 20, 0.015, 8, false);
+        return (
+          <mesh key={nerve.name} geometry={tubeGeo}>
+            <meshStandardMaterial
+              color={nerve.color}
+              transparent
+              opacity={0.7}
+              roughness={0.3}
+              emissive={nerve.color}
+              emissiveIntensity={0.3}
+            />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+/** Converts an intensity (0-10) to a heatmap color (blue → green → yellow → red) */
+function intensityToColor(intensity: number): THREE.Color {
+  const t = Math.max(0, Math.min(1, intensity / 10));
+  if (t < 0.25) {
+    return new THREE.Color('#93c5fd').lerp(new THREE.Color('#6ee7b7'), t / 0.25);
+  } else if (t < 0.5) {
+    return new THREE.Color('#6ee7b7').lerp(new THREE.Color('#fde047'), (t - 0.25) / 0.25);
+  } else if (t < 0.75) {
+    return new THREE.Color('#fde047').lerp(new THREE.Color('#fb923c'), (t - 0.5) / 0.25);
+  } else {
+    return new THREE.Color('#fb923c').lerp(new THREE.Color('#ef4444'), (t - 0.75) / 0.25);
+  }
+}
+
 class SimpleErrorBoundary extends React.Component<{children: React.ReactNode, fallback: React.ReactNode}, {hasError: boolean}> {
   constructor(props: any) {
     super(props);
@@ -56,8 +173,23 @@ class SimpleErrorBoundary extends React.Component<{children: React.ReactNode, fa
   }
 }
 
-function RealisticHead({ onToggleRegion, selectedRegions }: { onToggleRegion: (region: RegionName) => void, selectedRegions: RegionName[] }) {
+function RealisticHead({ onToggleRegion, selectedRegions, regionIntensities }: { onToggleRegion: (region: RegionName) => void, selectedRegions: RegionName[], regionIntensities?: RegionIntensity[] }) {
   const gltf = useGLTF('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb');
+
+  // Extract PBR maps from the original model material
+  const pbrMaps = useMemo(() => {
+    let normalMap: THREE.Texture | null = null;
+    let map: THREE.Texture | null = null;
+    gltf.scene.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh && mesh.material) {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat.normalMap) normalMap = mat.normalMap;
+        if (mat.map) map = mat.map;
+      }
+    });
+    return { normalMap, map };
+  }, [gltf]);
   
   const normalizedGeometry = useMemo(() => {
     let found: THREE.Mesh | null = null;
@@ -135,6 +267,12 @@ function RealisticHead({ onToggleRegion, selectedRegions }: { onToggleRegion: (r
     const hoveredColor = new THREE.Color('#fee2e2'); // red-100
     const selectedHoveredColor = new THREE.Color('#f87171'); // red-400
     const boundaryColor = new THREE.Color('#9ca3af'); // gray-400
+
+    // Build intensity lookup map
+    const intensityMap = new Map<RegionName, number>();
+    if (regionIntensities) {
+      regionIntensities.forEach(({ region, intensity }) => intensityMap.set(region, intensity));
+    }
     
     for (let i = 0; i < pos.count; i++) {
       const rIdx = vertexRegions[i];
@@ -146,9 +284,13 @@ function RealisticHead({ onToggleRegion, selectedRegions }: { onToggleRegion: (r
         const regionName = regionInfo.name as RegionName;
         const isSelected = selectedRegions.includes(regionName);
         const isHovered = hoveredRegion === regionName;
+        const regionIntensity = intensityMap.get(regionName);
         
         if (isBoundary[i]) {
           c = boundaryColor;
+        } else if (regionIntensity !== undefined && regionIntensity > 0) {
+          // Heatmap mode: intensity-based coloring
+          c = intensityToColor(regionIntensity);
         } else if (isSelected && isHovered) {
           c = selectedHoveredColor;
         } else if (isSelected) {
@@ -167,7 +309,7 @@ function RealisticHead({ onToggleRegion, selectedRegions }: { onToggleRegion: (r
     
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     return geo;
-  }, [normalizedGeometry, vertexRegions, isBoundary, selectedRegions, hoveredRegion]);
+  }, [normalizedGeometry, vertexRegions, isBoundary, selectedRegions, hoveredRegion, regionIntensities]);
 
   const handlePointerDown = (e: any) => {
     e.stopPropagation();
@@ -217,7 +359,13 @@ function RealisticHead({ onToggleRegion, selectedRegions }: { onToggleRegion: (r
       castShadow
       receiveShadow
     >
-      <meshStandardMaterial vertexColors={true} roughness={0.6} metalness={0.1} />
+      <meshStandardMaterial
+        vertexColors={true}
+        roughness={0.55}
+        metalness={0.05}
+        normalMap={pbrMaps.normalMap ?? undefined}
+        normalScale={new THREE.Vector2(0.8, 0.8)}
+      />
     </mesh>
   );
 }
@@ -394,7 +542,7 @@ function FallbackHead({ onToggleRegion, selectedRegions }: { onToggleRegion: (re
   );
 }
 
-export function HeadDiagram3D({ selectedRegions, onToggleRegion, className }: HeadDiagramProps) {
+export function HeadDiagram3D({ selectedRegions, onToggleRegion, className, regionIntensities, showNerveOverlay }: HeadDiagramProps) {
   return (
     <div className={cn("flex flex-col md:flex-row gap-4 w-full", className)}>
       <div className="relative flex-1 aspect-square bg-gray-50 rounded-2xl overflow-hidden cursor-grab active:cursor-grabbing">
@@ -410,13 +558,20 @@ export function HeadDiagram3D({ selectedRegions, onToggleRegion, className }: He
             position={[-5, 5, -5]} 
             intensity={0.5} 
           />
+          {/* Rim light for skin subsurface scattering approximation */}
+          <directionalLight
+            position={[0, 2, -4]}
+            intensity={0.4}
+            color="#fca5a5"
+          />
           
           <Environment preset="city" />
           
           <group position={[0, 0.2, 0]}>
             <SimpleErrorBoundary fallback={<FallbackHead onToggleRegion={onToggleRegion} selectedRegions={selectedRegions} />}>
               <Suspense fallback={<FallbackHead onToggleRegion={onToggleRegion} selectedRegions={selectedRegions} />}>
-                <RealisticHead onToggleRegion={onToggleRegion} selectedRegions={selectedRegions} />
+                <RealisticHead onToggleRegion={onToggleRegion} selectedRegions={selectedRegions} regionIntensities={regionIntensities} />
+                {showNerveOverlay && <NerveOverlay />}
               </Suspense>
             </SimpleErrorBoundary>
           </group>
