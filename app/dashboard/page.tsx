@@ -23,10 +23,10 @@ export default function DashboardPage() {
   if (!mounted || !currentUser) return null;
 
   const userSessions = sessions.filter(s => s.user_id === currentUser.id);
-  
+
   // Basic Analytics
   const totalLogs = userSessions.length;
-  
+
   let totalDurationMinutes = 0;
   let totalIntensity = 0;
   let totalRegionsLogged = 0;
@@ -35,7 +35,7 @@ export default function DashboardPage() {
     const start = parseISO(session.start_time);
     const end = parseISO(session.end_time);
     totalDurationMinutes += Math.max(0, differenceInMinutes(end, start));
-    
+
     session.regions.forEach(r => {
       totalIntensity += r.intensity;
       totalRegionsLogged += 1;
@@ -85,7 +85,7 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Recent Logs</h2>
           </div>
-          
+
           {userSessions.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-2xl border border-gray-100 border-dashed">
               <p className="text-gray-500 mb-4">No migraines logged yet.</p>
@@ -107,17 +107,31 @@ export default function DashboardPage() {
                       {session.regions.length} regions
                     </div>
                   </div>
-                  
+
                   {session.regions.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-3">
+                    <div className="flex flex-col gap-3 mb-3 mt-4">
                       {session.regions.map(r => (
-                        <span key={r.region_name} className="inline-flex items-center px-2 py-1 rounded-md bg-gray-50 text-xs text-gray-600 border border-gray-200">
-                          {r.region_name} <span className="ml-1 font-semibold text-gray-900">{r.intensity}/10</span>
-                        </span>
+                        <div key={r.region_name} className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-gray-800">{r.region_name}</span>
+                            <span className="text-xs font-bold text-gray-900 bg-white px-2 py-1 rounded-md shadow-sm border border-gray-100">
+                              Intensity: {r.intensity}/10
+                            </span>
+                          </div>
+                          {r.pain_types && r.pain_types.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-3">
+                              {r.pain_types.map(pt => (
+                                <span key={pt} className="text-[10px] uppercase tracking-wider font-semibold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
+                                  {pt}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
-                  
+
                   {session.notes && (
                     <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mt-2">
                       {session.notes}
@@ -131,7 +145,7 @@ export default function DashboardPage() {
       </main>
 
       <div className="fixed bottom-6 left-0 right-0 flex justify-center px-4">
-        <Link 
+        <Link
           href="/log"
           className="bg-gray-900 text-white shadow-lg shadow-gray-900/20 rounded-full px-6 py-4 flex items-center space-x-2 hover:bg-gray-800 transition-transform active:scale-95"
         >

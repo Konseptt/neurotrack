@@ -2,18 +2,37 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 
-export type RegionName = 
-  | 'Left temple'
-  | 'Right temple'
-  | 'Forehead'
-  | 'Behind left eye'
-  | 'Behind right eye'
-  | 'Back of head'
-  | 'Neck base';
+export type RegionName =
+  | 'Frontal (Forehead)'
+  | 'Vertex (Crown)'
+  | 'Left Temporal'
+  | 'Right Temporal'
+  | 'Left Parietal'
+  | 'Right Parietal'
+  | 'Left Periorbital'
+  | 'Right Periorbital'
+  | 'Left Sinus / Maxillary'
+  | 'Right Sinus / Maxillary'
+  | 'Left Auricular'
+  | 'Right Auricular'
+  | 'Occipital (Back of Skull)'
+  | 'Suboccipital (Base of Skull)'
+  | 'Cervicogenic (Neck)';
+
+export type PainType =
+  | 'Pulsating'
+  | 'Stabbing'
+  | 'Pressing'
+  | 'Burning'
+  | 'Throbbing'
+  | 'Shooting'
+  | 'Squeezing'
+  | 'Dull Ache';
 
 export interface RegionLog {
   region_name: RegionName;
   intensity: number; // 0 to 10
+  pain_types: PainType[];
 }
 
 export interface MigraineSession {
@@ -60,13 +79,13 @@ export const useAppStore = create<AppState>()(
       addSession: (sessionData) => {
         const { currentUser, sessions } = get();
         if (!currentUser) return;
-        
+
         const newSession: MigraineSession = {
           ...sessionData,
           id: uuidv4(),
           user_id: currentUser.id,
         };
-        
+
         set({ sessions: [...sessions, newSession] });
       },
       deleteSession: (id) => {
