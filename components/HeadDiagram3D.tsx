@@ -49,6 +49,8 @@ const ALL_VORONOI_REGIONS = [
   ...DUMMY_REGIONS.map(r => ({ ...r, clickable: false }))
 ];
 
+const PBR_NORMAL_SCALE = new THREE.Vector2(0.8, 0.8);
+
 /**
  * Trigeminal nerve pathway definitions - three main branches:
  * V1 (Ophthalmic), V2 (Maxillary), V3 (Mandibular)
@@ -364,7 +366,7 @@ function RealisticHead({ onToggleRegion, selectedRegions, regionIntensities }: {
         roughness={0.55}
         metalness={0.05}
         normalMap={pbrMaps.normalMap ?? undefined}
-        normalScale={new THREE.Vector2(0.8, 0.8)}
+        normalScale={PBR_NORMAL_SCALE}
       />
     </mesh>
   );
