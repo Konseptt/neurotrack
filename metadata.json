@@ -1,0 +1,5 @@
+{
+  "name": "NeuroTrack",
+  "description": "Minimal MVP for a migraine tracking application.",
+  "requestFramePermissions": []
+}
